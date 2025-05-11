@@ -1,45 +1,94 @@
 const express = require('express');
 const router = express.Router();
 const protectRoute = require('../middleware/auth');
-const Order= require('../Models/Orders');
+const Need= require('../Models/Need');
 
 
-router.post('/orders',protectRoute(['user']), async (req, res) => {
+router.post('/needs/:name', async (req, res) => {
   try {
-      const { customerid, customerName, address, phoneNumber, totalPrice,status, details } = req.body;
-     
-      // Validate required fields
-      if (!customerid || !customerName || !address || !phoneNumber || !totalPrice || !details || details.length === 0) {
-        return res.status(400).json({ msg: 'Please include all required fields' });
-      }
-  
-      const newOrder = new Order({
-        customerid,
-        customerName,
-        address,
-        phoneNumber,
-        totalPrice,
-        status,
-        details
-      });
-     
-      // Save the order to the database
-      const savedOrder = await newOrder.save();
-  
-      // Send a response with the saved order
-      res.status(201).json(savedOrder);
-    } catch (err) {
-      console.error(err.message);
-      res.status(500).json({ msg: 'Server error' });
+    const { 
+      title, 
+      description, 
+      category, 
+      status, 
+      assignedTo, 
+      imageUrls 
+    } = req.body;
+
+    // if (!user?.username || !title || !description || !category) {
+    //   return res.status(400).json({ msg: 'Please include all required fields: user (with username), title, description, and category.' });
+    // }
+
+    // const validCategories = ['Project', 'Notes', 'Assignment', 'Study', 'other'];
+    // if (!validCategories.includes(category)) {
+    //   return res.status(400).json({ msg: `Invalid category. Must be one of: ${validCategories.join(', ')}` });
+    // }
+
+    // const validStatuses = ['open', 'assigned', 'closed'];
+    // if (status && !validStatuses.includes(status)) {
+    //   return res.status(400).json({ msg: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+    // }
+
+    if (imageUrls && !imageUrls.every(url => /^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$/i.test(url))) {
+      return res.status(400).json({ msg: 'One or more image URLs are invalid.' });
     }
+
+    const newNeed = new Need({
+      user: {
+        username: req.params.name
+      },
+      title,
+      description,
+      category,
+      status: status || 'open',
+      assignedTo: assignedTo || null,
+      imageUrls: imageUrls || []
+    });
+
+    const savedNeed = await newNeed.save();
+
+    res.status(201).json(savedNeed);
+
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ msg: 'Server error' });
+  }
 });
-router.get('/orders/:id', protectRoute(['user']),async (req, res) => {
+router.put('/needs/:id', async (req, res) => {
   try {
-     
-      const orders = await Order.find({ customerid: req.params.id }); 
-      res.json(orders); 
+    const {
+      title,
+      description,
+      category,
+      status,
+      assignedTo,
+      imageUrls,
+    } = req.body; 
+
+    const updatedNeed = await Need.findByIdAndUpdate(
+      req.params.id, 
+      {
+        $set: {
+          title,
+          description,
+          category,
+          status,
+          assignedTo,
+          imageUrls,
+        },
+      },
+      { new: true, runValidators: true } 
+    );
+
+   
+    if (!updatedNeed) {
+      return res.status(404).json({ msg: "Need not found" });
+    }
+
+    res.status(200).json(updatedNeed);
   } catch (error) {
-      res.status(500).json({ message: error.message });
+    console.error("Error updating the need:", error.message);
+    res.status(500).json({ msg: "Server error" });
   }
 });
 module.exports = router;

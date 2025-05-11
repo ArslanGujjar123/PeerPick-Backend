@@ -1,26 +1,35 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const User = require('../Models/Users');
+const User = require('../Models/User');
 const router = express.Router();
 
 const key = process.env.SECRET_KEY;
 
 // Register Route
 router.post('/register', async (req, res) => {
-    const { name, email, password } = req.body;
-  
-
     try {
-        // Check if user already exists
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({ success: false, message: 'Email already exists' });
+    const { username, password, token } = req.body;
+
+    if (!token) {
+            return res.status(400).json({ success: false, message: "Token is required" });
         }
 
-        // Create a new user
+        const decoded = jwt.verify(token, key);
+        const email = decoded.email; // FIXED: Ensure email is extracted from decoded token
+
+        // Validate email domain
+        if (!email.endsWith("@umt.edu.pk")) {
+            return res.status(403).json({ success: false, message: "Invalid email domain" });
+        }
+
+        // Check if username is already taken
+        const existingUser = await User.findOne({ username });
+        if (existingUser) {
+            return res.status(400).json({ success: false, message: "Username already taken" });
+        }
         const newUser = new User({
-            name,
+            username,
             email,
             password
         });
@@ -35,16 +44,15 @@ router.post('/register', async (req, res) => {
         // Create JWT Payload
         const payload = {
             id: savedUser._id,
-            name: savedUser.name,
+            name:username,
             role: 'user',
         };
 
-        // Sign token and send it back
-        const token = jwt.sign(payload, key, { expiresIn: '2h' }); // Token expires in 1 hour
-
+        const token1 = jwt.sign(payload, key, { expiresIn: '4h' }); 
         return res.json({
             success: true,
-            token: 'Bearer ' + token
+            token: 'Bearer ' + token1,
+            userId: savedUser._id
         });
     } catch (error) {
         console.error(error);
@@ -53,35 +61,35 @@ router.post('/register', async (req, res) => {
 });
 
 
-// Login Route
 router.post('/login', (req, res) => {
-    const { email, password } = req.body;
+    const { username, password } = req.body;
   
     // Find user by email
-    User.findOne({ email }).then(user => {
+    User.findOne({ username }).then(user => {
       if (!user) {
-        return res.status(404).json({ email: 'User not found' });
+        return res.status(404).json({ username: 'User not found' });
       }
   
       // Check password
       bcrypt.compare(password, user.password).then(isMatch => {
         if (isMatch) {
-          // User matched, create JWT Payload with role
+         
           const payload = {
             id: user._id,
-            name: user.name,
-            role: user.role,  // Include the user's role
+            name: username,
+            role: user.role, 
           };
   
           // Sign token
           jwt.sign(
             payload,
             key,
-            { expiresIn: '2h' },  // 1 hour expiration
+            { expiresIn: '4h' },  
             (err, token) => {
               res.json({
                 success: true,
-                token: 'Bearer ' + token,  // Return the token to the client
+                token: 'Bearer ' + token, 
+                userId: user._id
               });
             }
           );
